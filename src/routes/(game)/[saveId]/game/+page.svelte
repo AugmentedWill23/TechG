@@ -26,18 +26,17 @@
 	import backIcon from '$lib/assets/icons/icon_back.svg';
 	import { Utility } from '$lib/ts/namespaces/Utility';
 
-	import { gameProjects, teams, gameFeatures } from '$lib/ts/stores/Stores';
+	import { gameProjects, teams, gameFeatures, platforms } from '$lib/ts/stores/Stores';
 	import Cardcheck from '$lib/components/CardCheck.svelte';
 	import type { LayoutData } from '../$types';
 	import { generateGameName } from '$lib/ts/classes/Generator';
-	import { platforms } from '$lib/ts/stores/Stores';
 	import { genres, type Genre } from '$lib/ts/types/Genre';
 	import { base } from '$app/paths';
 	import AlertMessage from '$lib/components/AlertMessage.svelte';
 	import themesData from '$lib/assets/data/data_themes.json';
 	import themesDescriptionData from '$lib/assets/data/data_theme_description.json';
 	import { create } from '$lib/ts/classes/Game';
-	import { getSystemSpecs } from '$lib/ts/classes/Platform';
+	import { getSystemSpecs, buyLicense } from '$lib/ts/classes/Platform';
 
 	export let data: LayoutData;
 
@@ -311,7 +310,7 @@
 								<button
 									disabled={$cash < platform.license.costPerYear}
 									on:click={() => {
-										platform.buyLicense();
+										buyLicense(platform);
 									}}
 									style="max-height: 3rem;max-width: fit-content; margin: 0.5rem;"
 									>{$language.BUY_LICENSE_FOR}
@@ -549,6 +548,7 @@
 
 				const game = create(name, [...platformIds], genre, team.id, undefined, Array.from(enabledFeatureIds));
 				game.gamesize = gamesize;
+				game.distributionMethod = 'Self Publish';
 
 				gameProjects.add(game);
 
