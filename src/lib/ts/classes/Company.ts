@@ -4,6 +4,7 @@ export type Company = {
 	owner: 'player' | 'competition';
 	type: 'PUBLIC_COMPANY' | 'PRIVATE_COMPANY';
 	location: string;
+	fame: number;
 }
 
 export function createCompany(): Company {
@@ -12,6 +13,7 @@ export function createCompany(): Company {
 		name: '',
 		owner: 'player',
 		type: 'PRIVATE_COMPANY',
-		location: 'Sunnyvale, California'
+		location: 'Sunnyvale, California',
+		fame: 0
 	};
 }

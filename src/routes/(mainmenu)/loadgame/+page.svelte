@@ -11,15 +11,37 @@
 
 	let selectedSave: Save | undefined;
 
+	function sanitizeFileName(name: string) {
+		return name.replace(/[/\\?%*:|"<>]/g, '-')?.slice(0, 200) || 'save';
+	}
+
 	export async function ExportSave(save: Save) {
 		const saveWithData = await saves.toObject(save);
-		const fileName = 'TechGiantsOpenSource' + '-' + crypto.randomUUID() + '-' + save.name;
-		const dataStr =
-			'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(saveWithData, replaceDateObject));
-		const dlAnchorElem = document.createElement('a');
-		dlAnchorElem.setAttribute('href', dataStr);
-		dlAnchorElem.setAttribute('download', fileName + '.save.json');
-		dlAnchorElem.click();
+		const safeName = sanitizeFileName(save.name || 'save');
+		const fileName = `TechGiantsOpenSource-${crypto.randomUUID()}-${safeName}.save.json`;
+
+		try {
+			const json = JSON.stringify(saveWithData, replaceDateObject);
+			const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+
+			if ((window as any).navigator && (window as any).navigator.msSaveOrOpenBlob) {
+				(window as any).navigator.msSaveOrOpenBlob(blob, fileName);
+				return;
+			}
+
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = fileName;
+			document.body.appendChild(a);
+			a.click();
+			a.remove();
+			setTimeout(() => URL.revokeObjectURL(url), 1500);
+		} catch (err) {
+			// fallback to data URI open in new tab
+			const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(saveWithData, replaceDateObject));
+			window.open(dataStr, '_blank');
+		}
 	}
 
 	let saveRecordToLoad: Record<any, any> | undefined = undefined;
@@ -105,8 +127,7 @@
 			<Button variant="danger" on:click={() => ConfirmImportSave()}>{$language.OVERWRITE}</Button>
 
 			<form>
-				<button type="submit" autofocus formmethod="dialog" style="height: 100%;"
-					>{$language.CLOSE}</button>
+				<button type="submit" autofocus formmethod="dialog" style="height: 100%;">{$language.CLOSE}</button>
 			</form>
 		</div>
 	</dialog>
