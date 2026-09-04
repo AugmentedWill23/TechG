@@ -37,7 +37,7 @@ export type Game = {
 	publisherId: string;
 	publisherRoyalies: number;
 	featuresIds: string[];
-	featureProgress: { [key: number]: number };
+	featureProgress: { [key: string]: number };
 	reviews?: { date: number; reviewerId: string; rating: number; text?: string }[];
 	lastQuarterlyReviewAt?: number;
 };
@@ -211,10 +211,10 @@ export function create(
 	game.name = name;
 	game.publisherId = 'SELF';
 	game.featuresIds = featuresIds;
-	game.featureProgress = featuresIds.reduce((acc, id) => {
+	game.featureProgress = featuresIds.reduce((acc: Record<string, number>, id) => {
 		acc[id] = 0;
 		return acc;
-	}, {} as any);
+	}, {});
 
 	return game;
 }
@@ -365,46 +365,61 @@ export function generateReviewsIfDue(game: Game, currentTime: Date) {
 	game.reviews ??= [];
 	game.lastQuarterlyReviewAt ??= 0;
 
-	const last = game.lastQuarterlyReviewAt ? new Date(game.lastQuarterlyReviewAt) : new Date(0);
-	const daysSince = Utility.countDays(last, currentTime);
+	// Need a release date to determine when reviews should start
+	if (!game.releaseDate) return;
 
-	// every ~120 days generate procedural reviews
-	if (game.reviews.length === 0 || daysSince >= 120) {
-		const reviewers = Random.RangeInt(3, 6);
-		const company = get(companies).find((c: any) => c.owner === 'player');
-		const fame = company?.fame ?? 0;
+	const releaseDate = new Date(game.releaseDate);
 
-		const templates = {
-			high: [
-				"A masterpiece of game design.",
-				"Exceptional execution and polish.",
-				"A must-play title with outstanding replayability."
-			],
-			mid: [
-				"A solid experience with some flaws.",
-				"Enjoyable, but could use more depth.",
-				"Good mechanics, average storytelling."
-			],
-			low: [
-				"Stumbles in many areas; rough around the edges.",
-				"Uninspired and buggy.",
-				"Not recommended unless you're a fan of the genre."
-			]
-		};
-
-		for (let i = 0; i < reviewers; i++) {
-			let base = Random.RangeInt(1, 10);
-			const fameBias = Math.floor(fame / 10);
-			let rating = Math.max(1, Math.min(10, base + fameBias));
-
-			const textArr = rating >= 8 ? templates.high : rating >= 4 ? templates.mid : templates.low;
-			const text = textArr.random();
-
-			game.reviews.push({ date: currentTime.getTime(), reviewerId: generateTwoWord(), rating, text });
+	// First review should happen after 120 days since release; afterwards after 120 days from lastQuarterlyReviewAt
+	if (!game.lastQuarterlyReviewAt || game.lastQuarterlyReviewAt === 0) {
+		const daysSinceRelease = Utility.countDays(releaseDate, currentTime);
+		if (daysSinceRelease < 120) {
+			// Not yet time for first quarterly review
+			return;
 		}
-
-		game.lastQuarterlyReviewAt = currentTime.getTime();
+	} else {
+		const last = new Date(game.lastQuarterlyReviewAt);
+		const daysSinceLast = Utility.countDays(last, currentTime);
+		if (daysSinceLast < 120) {
+			// Not due yet
+			return;
+		}
 	}
+
+	const reviewers = Random.RangeInt(3, 6);
+	const company = get(companies).find((c: any) => c.owner === 'player');
+	const fame = company?.fame ?? 0;
+
+	const templates = {
+		high: [
+			"A masterpiece of game design.",
+			"Exceptional execution and polish.",
+			"A must-play title with outstanding replayability."
+		],
+		mid: [
+			"A solid experience with some flaws.",
+			"Enjoyable, but could use more depth.",
+			"Good mechanics, average storytelling."
+		],
+		low: [
+			"Stumbles in many areas; rough around the edges.",
+			"Uninspired and buggy.",
+			"Not recommended unless you're a fan of the genre."
+		]
+	};
+
+	for (let i = 0; i < reviewers; i++) {
+		let base = Random.RangeInt(1, 10);
+		const fameBias = Math.floor(fame / 10);
+		let rating = Math.max(1, Math.min(10, base + fameBias));
+
+		const textArr = rating >= 8 ? templates.high : rating >= 4 ? templates.mid : templates.low;
+		const text = textArr.random();
+
+		game.reviews.push({ date: currentTime.getTime(), reviewerId: generateTwoWord(), rating, text });
+	}
+
+	game.lastQuarterlyReviewAt = currentTime.getTime();
 }
 
 export function generateQuarterlyReviewsAll(currentTime: Date) {
