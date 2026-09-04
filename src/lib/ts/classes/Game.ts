@@ -6,7 +6,7 @@ import { Random } from '../namespaces/Random';
 import { get } from 'svelte/store';
 import { Utility } from '../namespaces/Utility';
 import { STARTING_DATE, time } from '../stores/Stores';
-import { publishers, teams, gameProjects, platforms, gameFeatures } from '$lib/ts/stores/Stores';
+import { publishers, teams, gameProjects, platforms, gameFeatures, companies } from '$lib/ts/stores/Stores';
 import { createNewsWithProp } from './News';
 import { type Platform } from './Platform';
 import { genres, type Genre } from '../types/Genre';
@@ -38,6 +38,8 @@ export type Game = {
 	publisherRoyalies: number;
 	featuresIds: string[];
 	featureProgress: { [key: number]: number };
+	reviews?: { date: number; reviewerId: string; rating: number; text?: string }[];
+	lastQuarterlyReviewAt?: number;
 };
 
 const competitorCompanies = generateCompanies();
@@ -69,7 +71,9 @@ export function createGame(): Game {
 		publisherId: '',
 		publisherRoyalies: 0,
 		featuresIds: [],
-		featureProgress: {}
+		featureProgress: {},
+		reviews: [],
+		lastQuarterlyReviewAt: 0
 	};
 }
 
@@ -210,7 +214,7 @@ export function create(
 	game.featureProgress = featuresIds.reduce((acc, id) => {
 		acc[id] = 0;
 		return acc;
-	}, {});
+	}, {} as any);
 
 	return game;
 }
@@ -348,6 +352,65 @@ export function runHypeStep(game: Game, currentTime: Date): Game {
 	}
 
 	return game;
+}
+
+// map average rating 1..10 to multiplier range; tune as desired
+function ratingToMultiplier(avg: number) {
+	const min = 0.8;
+	const max = 1.4;
+	return min + ((avg - 1) * (max - min)) / 9;
+}
+
+export function generateReviewsIfDue(game: Game, currentTime: Date) {
+	game.reviews ??= [];
+	game.lastQuarterlyReviewAt ??= 0;
+
+	const last = game.lastQuarterlyReviewAt ? new Date(game.lastQuarterlyReviewAt) : new Date(0);
+	const daysSince = Utility.countDays(last, currentTime);
+
+	// every ~120 days generate procedural reviews
+	if (game.reviews.length === 0 || daysSince >= 120) {
+		const reviewers = Random.RangeInt(3, 6);
+		const company = get(companies).find((c: any) => c.owner === 'player');
+		const fame = company?.fame ?? 0;
+
+		const templates = {
+			high: [
+				"A masterpiece of game design.",
+				"Exceptional execution and polish.",
+				"A must-play title with outstanding replayability."
+			],
+			mid: [
+				"A solid experience with some flaws.",
+				"Enjoyable, but could use more depth.",
+				"Good mechanics, average storytelling."
+			],
+			low: [
+				"Stumbles in many areas; rough around the edges.",
+				"Uninspired and buggy.",
+				"Not recommended unless you're a fan of the genre."
+			]
+		};
+
+		for (let i = 0; i < reviewers; i++) {
+			let base = Random.RangeInt(1, 10);
+			const fameBias = Math.floor(fame / 10);
+			let rating = Math.max(1, Math.min(10, base + fameBias));
+
+			const textArr = rating >= 8 ? templates.high : rating >= 4 ? templates.mid : templates.low;
+			const text = textArr.random();
+
+			game.reviews.push({ date: currentTime.getTime(), reviewerId: generateTwoWord(), rating, text });
+		}
+
+		game.lastQuarterlyReviewAt = currentTime.getTime();
+	}
+}
+
+export function generateQuarterlyReviewsAll(currentTime: Date) {
+	get(gameProjects)
+		.filter((g) => g.phase === SoftwareReleaseLifeCycle.Release)
+		.forEach((g) => generateReviewsIfDue(g, currentTime));
 }
 
 export function runStep(game: Game, currentTime: Date): Game {
@@ -623,7 +686,13 @@ function getAverageFeatureScale(game: Game) {
 }
 
 function reportUnitSales(game: Game, unitsSold: number, currentTime: Date) {
-	const salesReport = unitsSold * (game.price - game.unitcost);
+	let salesReport = unitsSold * (game.price - game.unitcost);
+	// apply review multiplier if available
+	if (game.reviews && game.reviews.length > 0) {
+		const avg = Math.round((game.reviews.reduce((s, r) => s + r.rating, 0) / game.reviews.length) * 10) / 10;
+		const mul = ratingToMultiplier(avg);
+		salesReport = Math.floor(salesReport * mul);
+	}
 	// report in monthly bases
 	const reportingDate = new Date(currentTime.getFullYear(), currentTime.getMonth()).getTime();
 
