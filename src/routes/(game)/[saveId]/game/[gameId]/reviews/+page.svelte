@@ -1,9 +1,11 @@
 <!-- Reviews page for a specific game -->
 <script lang="ts">
   import { page } from '$app/stores';
-  import { gameProjects } from '$lib/ts/stores/Stores';
+  import { gameProjects, language } from '$lib/ts/stores/Stores';
   import Reviews from '$lib/components/Reviews.svelte';
-  import { onMount } from 'svelte';
+  import { get } from 'svelte/store';
+  import backIcon from '$lib/assets/icons/icon_back.svg';
+
   let gameId: string | null = null;
   let saveId: string | null = null;
   let game = null;
@@ -18,9 +20,10 @@
 
 <header class="back">
   <a href="javascript:history.back()" class="back">
-    <span>Back</span>
+    <img src={backIcon} alt="" />
+    <span>{$language.BACK}</span>
   </a>
-  <h1>Reviews</h1>
+  <h1>{$language.REVIEWS || 'Reviews'}</h1>
 </header>
 
 <main>
